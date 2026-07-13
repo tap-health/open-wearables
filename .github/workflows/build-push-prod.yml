@@ -1,0 +1,81 @@
+name: Build & push prod images to GHCR
+
+on:
+  push:
+    branches:
+      - tap-health/prod
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  ORG: tap-health
+  VITE_API_URL: https://ow.prod.tap.health
+
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.ORG }}/ow-platform:prod
+            ${{ env.REGISTRY }}/${{ env.ORG }}/ow-platform:prod-${{ github.sha }}
+          cache-from: type=gha,scope=ow-platform
+          cache-to: type=gha,mode=max,scope=ow-platform
+          labels: |
+            org.opencontainers.image.source=https://github.com/tap-health/open-wearables
+            org.opencontainers.image.revision=${{ github.sha }}
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push frontend (production)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          build-args: |
+            VITE_API_URL=${{ env.VITE_API_URL }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.ORG }}/ow-frontend:prod
+            ${{ env.REGISTRY }}/${{ env.ORG }}/ow-frontend:prod-${{ github.sha }}
+          cache-from: type=gha,scope=ow-frontend
+          cache-to: type=gha,mode=max,scope=ow-frontend
+          labels: |
+            org.opencontainers.image.source=https://github.com/tap-health/open-wearables
+            org.opencontainers.image.revision=${{ github.sha }}
